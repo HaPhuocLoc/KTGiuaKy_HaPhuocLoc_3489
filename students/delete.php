@@ -1,6 +1,7 @@
 <?php
 include "../database/db_connect.php";
-$id = $_GET['id'];
-$conn->query("DELETE FROM SinhVien WHERE MaSV='$id'");
+$maSV = $_GET['id'];
+$conn->query("DELETE FROM SinhVien WHERE MaSV='$maSV'");
 header("Location: index.php");
 ?>
+

@@ -2,38 +2,42 @@
 session_start();
 include "../database/db_connect.php";
 
-if (!isset($_SESSION['MaSV'])) {
-    echo "Vui lòng đăng nhập!";
-    exit();
-}
+// Kiểm tra nếu có POST request
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $maSV = $_SESSION['MaSV'] ?? null;
+    $maHP = $_POST['MaHP'] ?? null;
 
-$maSV = $_SESSION['MaSV'];
-$maHP = $_POST['MaHP'];
-
-// Kiểm tra số lượng còn lại
-$sql_check = "SELECT SoLuongDuKien FROM HocPhan WHERE MaHP='$maHP'";
-$result = $conn->query($sql_check);
-$row = $result->fetch_assoc();
-
-if ($row['SoLuongDuKien'] > 0) {
-    // Thêm vào bảng DangKy nếu chưa có
-    $sql_dangky = "INSERT INTO DangKy (NgayDK, MaSV) VALUES (NOW(), '$maSV')";
-    $conn->query($sql_dangky);
-    $maDK = $conn->insert_id;
-
-    // Thêm vào bảng ChiTietDangKy
-    $sql_chitiet = "INSERT INTO ChiTietDangKy (MaDK, MaHP) VALUES ('$maDK', '$maHP')";
-    $sql_update_soluong = "UPDATE HocPhan SET SoLuongDuKien = SoLuongDuKien - 1 WHERE MaHP='$maHP'";
-
-    if ($conn->query($sql_chitiet) === TRUE && $conn->query($sql_update_soluong) === TRUE) {
-        echo "Đăng ký thành công! Số lượng sinh viên còn lại: " . ($row['SoLuongDuKien'] - 1);
-        header("Location: index.php");
-    } else {
-        echo "Lỗi: " . $conn->error;
+    if (!$maSV || !$maHP) {
+        die("Lỗi: Không có thông tin sinh viên hoặc học phần.");
     }
+
+    // Kiểm tra xem sinh viên đã đăng ký học phần này chưa
+    $check_sql = "SELECT * FROM ChiTietDangKy WHERE MaDK = (SELECT MaDK FROM DangKy WHERE MaSV = ?) AND MaHP = ?";
+    $stmt = $conn->prepare($check_sql);
+    $stmt->bind_param("ss", $maSV, $maHP);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        echo "<script>alert('Bạn đã đăng ký học phần này rồi!'); window.location.href='/DangKyHocPhan/index.php';</script>";
+        exit();
+    }
+
+    // Nếu chưa đăng ký, thêm vào bảng DangKy và ChiTietDangKy
+    $insert_sql = "INSERT INTO DangKy (MaSV, NgayDK) VALUES (?, NOW())";
+    $stmt = $conn->prepare($insert_sql);
+    $stmt->bind_param("s", $maSV);
+    $stmt->execute();
+
+    $maDK = $conn->insert_id; // Lấy ID của dòng vừa thêm
+
+    $insert_detail_sql = "INSERT INTO ChiTietDangKy (MaDK, MaHP) VALUES (?, ?)";
+    $stmt = $conn->prepare($insert_detail_sql);
+    $stmt->bind_param("is", $maDK, $maHP);
+    $stmt->execute();
+
+    echo "<script>alert('Đăng ký học phần thành công!'); window.location.href='/DangKyHocPhan/index.php';</script>";
 } else {
-    echo "Học phần này đã đầy, không thể đăng ký!";
+    echo "Lỗi: Yêu cầu không hợp lệ.";
 }
 ?>
-
-
